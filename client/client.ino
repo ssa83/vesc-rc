@@ -44,7 +44,7 @@ void setup()
     radio.begin();
     radio.setDataRate(RF24_250KBPS);
     radio.setChannel(channels[i_channel]);
-    radio.setPALevel(RF24_PA_HIGH);
+    radio.setPALevel(RF24_PA_MAX);
     radio.setRetries(15,15);
     radio.setPayloadSize(payload_size);    
     radio.openWritingPipe(address_client);
@@ -171,34 +171,6 @@ void draw() {
     myOLED.update(); // Обновляем информацию на дисплее    
 }
 
-void findFreeChannel()
-{
-    bool ok = false;
-    while(!ok) {
-        radio.stopListening();
-//        radio.setChannel(channels[i_channel]);
-        out_data[0] = req_check_channel;
-        if (radio.write(&(out_data[0]), payload_size)) {
-            radio.startListening();
-            bool timeout = false;
-            unsigned long started_waiting_at = micros();
-            while ((!radio.available()) && (!timeout)) {
-                if ((micros() - started_waiting_at) > wi_timeout) {
-                    timeout = true;
-                }
-            }
-            if (!timeout) {
-                in_data[0] = 0;
-                radio.read(&(in_data[0]), payload_size);
-                if (in_data[0] == ans_check_channel) {
-                    return;                    
-                }
-            }
-        }
-        i_channel = ((i_channel + 1) % nChannels);
-    }
-}
-
 void set_connected(bool c) {
     if (c != is_connected) {
         is_connected = c;
@@ -206,10 +178,15 @@ void set_connected(bool c) {
     }
 }
 
+uint8_t disconnection_count = 0;
 void on_disconnect() {
-    set_connected(false);
-    findFreeChannel();
-    set_connected(true);    
+    disconnection_count++;
+    if (disconnection_count >= 5) {
+        disconnection_count = 0;
+        set_connected(false);
+        i_channel = (i_channel + 1) % nChannels;
+        radio.setChannel(channels[i_channel]);
+    }
 }
 
 

@@ -36,7 +36,7 @@ void setup()
     radio.begin();
     radio.setDataRate(RF24_250KBPS);
     radio.setChannel(channels[i_channel]);
-    radio.setPALevel(RF24_PA_HIGH);
+    radio.setPALevel(RF24_PA_MAX);
     radio.setRetries(15,15);
     radio.setPayloadSize(payload_size);
     radio.openWritingPipe(address_server);
@@ -56,37 +56,6 @@ const unsigned char ans_error = 1;
 const unsigned char ans_values = 2;
 const unsigned char ans_error_2 = 3;
 const unsigned char ans_check_channel = 4;
-
-void findFreeChannel()
-{
-    bool ok = false;
-    while(!ok) {
-        radio.stopListening();
-//        radio.setChannel(channels[i_channel]);
-        radio.startListening();
-        bool timeout = false;
-        unsigned long _started_waiting_at = micros();
-        while ((!radio.available()) && (!timeout)) {
-            if ((micros() - _started_waiting_at) > 10*wi_timeout) {
-                timeout = true;
-            }
-        }
-        if (!timeout) {
-            in_data[0] = 0;
-            radio.read(&(in_data[0]), payload_size);
-            if (in_data[0] == ans_check_channel) {
-                radio.stopListening();
-                out_data[0] = req_check_channel;
-                if (radio.write(&(out_data[0]), payload_size)) {
-                    radio.startListening();
-                        return;                    
-                }
-                radio.startListening();
-            }
-        }
-        i_channel = ((i_channel + 1) % nChannels);
-    }
-}
 
 
 void loop()
@@ -167,14 +136,17 @@ void loop()
             // error
         }
     }
-    if (micros() - started_waiting_at > 1000000) {
-        for (uint8_t i = 0; i < 10; ++i) {
-            if (pi.setCurrent(0)) {
-                Serial.write(pi.Buffer.buf, pi.Buffer.len);
-                Serial.flush();
-            }
+    if (micros() - started_waiting_at > 300000) {
+        if (pi.setCurrent(0)) {
+            Serial.write(pi.Buffer.buf, pi.Buffer.len);
+            Serial.flush();
         }
-        findFreeChannel();
+    }
+    if (micros() - started_waiting_at > 1000000) {
+        i_channel = (i_channel + 1) % nChannels;
+        radio.stopListening();
+        radio.setChannel(channels[i_channel]);
+        radio.startListening();
         started_waiting_at = micros();
     }
 }
